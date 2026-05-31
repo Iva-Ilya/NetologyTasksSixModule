@@ -1,79 +1,132 @@
 #include "BDcontrol.h"
 
-BDcontrol::BDcontrol(std::string conectionSetup) :
-    c{conectionSetup},
-    tableName{}
-{}
+BDcontrol::BDcontrol(const std::string& connectionSetup)
+    : c{ connectionSetup }, tableName{} {}
 
-void BDcontrol::createTable(std::string tableName){
-    pqxx::work tx( c );
-    std::string sqlRequest{"CREATE TABLE IF NOT EXISTS " + 
-                            tx.esc(tableName) +
-                            " (id SERIAL PRIMARY KEY, name TEXT NOT NULL, surname TEXT NOT NULL, email TEXT, phoneNumber TEXT)"};
-    tx.exec(sqlRequest);
+
+void BDcontrol::createTable(const std::string& tableName) {
+    pqxx::work tx(c);
+
+    std::string sql =
+        "CREATE TABLE IF NOT EXISTS " + tableName +
+        " ("
+        "id SERIAL PRIMARY KEY, "
+        "name TEXT NOT NULL, "
+        "surname TEXT NOT NULL, "
+        "email TEXT, "
+        "phoneNumber TEXT"
+        ")";
+
+    tx.exec(sql);
+    tx.commit();
+
     this->tableName = tableName;
+}
+
+
+void BDcontrol::addClient(const std::string& name,
+    const std::string& surname,
+    const std::string& email) {
+    pqxx::work tx(c);
+
+    std::string sql =
+        "INSERT INTO " + tableName +
+        " (name, surname, email) VALUES (" +
+        tx.quote(name) + ", " +
+        tx.quote(surname) + ", " +
+        tx.quote(email) + ")";
+
+    tx.exec(sql);
     tx.commit();
 }
 
 
-void BDcontrol::addClient(std::string name, std::string surname, std::string email){
-    pqxx::work tx( c );
-    std::string sqlRequest{"INSERT INTO " + tableName + " (name, surname, email) VALUES('" + 
-                            tx.esc(name) + "', '" + 
-                            tx.esc(surname) + "', '" +
-                            tx.esc(email) + "')"};
-    tx.exec(sqlRequest);
+void BDcontrol::addClientPhone(size_t id, const std::string& phone) {
+    pqxx::work tx(c);
+
+    std::string sql =
+        "UPDATE " + tableName +
+        " SET phoneNumber = " + tx.quote(phone) +
+        " WHERE id = " + tx.quote(id);
+
+    tx.exec(sql);
     tx.commit();
 }
 
 
-void BDcontrol::addClientPhone(size_t id, std::string phone){
-    pqxx::work tx( c );
-    std::string sqlRequest{"UPDATE " + tableName + " SET phoneNumber='" + tx.esc(phone) + "' WHERE id=" + tx.quote(id)};
-    tx.exec(sqlRequest);
+void BDcontrol::changeClientData(size_t id,
+    const std::string& name,
+    const std::string& surname,
+    const std::string& email,
+    const std::string& phone) {
+    pqxx::work tx(c);
+
+    std::string sql =
+        "UPDATE " + tableName +
+        " SET name = " + tx.quote(name) +
+        ", surname = " + tx.quote(surname) +
+        ", email = " + tx.quote(email) +
+        ", phoneNumber = " + tx.quote(phone) +
+        " WHERE id = " + tx.quote(id);
+
+    tx.exec(sql);
     tx.commit();
 }
 
 
-void BDcontrol::changeClientData(size_t id, std::string name, std::string surname, std::string email, std::string phone){
-    pqxx::work tx( c );
-    std::string sqlRequest{"UPDATE " + tableName +
-                            " SET name = '" + tx.esc(name) + 
-                            "', surname = '" + tx.esc(surname) + 
-                            "', email='" + tx.esc(email) + 
-                            "', phoneNumber='" + tx.esc(phone) + 
-                            "' WHERE id=" + tx.quote(id)};
-    tx.exec(sqlRequest);
+void BDcontrol::removeClientPhone(size_t id) {
+    pqxx::work tx(c);
+
+    std::string sql =
+        "UPDATE " + tableName +
+        " SET phoneNumber = NULL WHERE id = " + tx.quote(id);
+
+    tx.exec(sql);
     tx.commit();
 }
 
 
+void BDcontrol::removeClient(size_t id) {
+    pqxx::work tx(c);
 
-void BDcontrol::removeClientPhone(size_t id){
-    pqxx::work tx( c );
-    std::string sqlRequest{"UPDATE " + tableName + " SET phoneNumber=NULL WHERE id=" + tx.quote(id)};
-    tx.exec(sqlRequest);
+    std::string sql =
+        "DELETE FROM " + tableName +
+        " WHERE id = " + tx.quote(id);
+
+    tx.exec(sql);
     tx.commit();
 }
 
 
-void BDcontrol::removeClient(size_t id){
-    pqxx::work tx( c );
-    std::string sqlRequest{"DELETE FROM " + tableName + " WHERE id=" + tx.quote(id)};
-    tx.exec(sqlRequest);
-    tx.commit();
-}
+std::vector<Client> BDcontrol::findClient(const std::string& name,
+    const std::string& surname,
+    const std::string& email,
+    const std::string& phone) {
+    pqxx::work tx(c);
 
+    std::string sql =
+        "SELECT id, name, surname, email, phoneNumber FROM " + tableName +
+        " WHERE name ILIKE " + tx.quote("%" + name + "%") +
+        " OR surname ILIKE " + tx.quote("%" + surname + "%") +
+        " OR email ILIKE " + tx.quote("%" + email + "%") +
+        " OR phoneNumber ILIKE " + tx.quote("%" + phone + "%");
 
-void BDcontrol::findClient(std::string name, std::string surname, std::string email, std::string phone){
-    pqxx::work tx( c );
-    std::string sqlRequest{"SELECT id, name FROM " + tableName +
-                            " WHERE name ILIKE " + tx.quote(name) + 
-                            " OR surname ILIKE " + tx.quote(surname) + 
-                            " OR email ILIKE " + tx.quote(email) + 
-                            " OR phoneNumber ILIKE " + tx.quote(phone)};
-    for (auto [id, name] : tx.query<std::string, std::string>(sqlRequest))
-    {
-        std::cout << id << " - client id and name is " << name << ".\n";
+    std::vector<Client> result;
+
+    pqxx::result r = tx.exec(sql);
+
+    for (const auto& row : r) {
+        Client c;
+
+        c.id = row["id"].as<size_t>();
+        c.name = row["name"].as<std::string>();
+        c.surname = row["surname"].as<std::string>();
+
+        c.email = row["email"].is_null() ? "" : row["email"].as<std::string>();
+        c.phone = row["phonenumber"].is_null() ? "" : row["phonenumber"].as<std::string>();
+
+        result.push_back(c);
     }
+
+    return result;
 }

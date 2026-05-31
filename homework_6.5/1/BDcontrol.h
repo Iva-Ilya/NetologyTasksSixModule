@@ -1,17 +1,33 @@
-#include <iostream>
+#pragma once
+
+#include <string>
+#include <vector>
 #include <pqxx/pqxx>
 
-class BDcontrol{
-public:
-    BDcontrol(std::string conectionSetup);
+struct Client {
+    size_t id;
+    std::string name;
+    std::string surname;
+    std::string email;
+    std::string phone;
+};
 
-    void createTable(std::string tableName);
-    void addClient(std::string name, std::string surname, std::string email);
-    void addClientPhone(size_t id, std::string phone);
-    void changeClientData(size_t id, std::string name, std::string surname, std::string email, std::string phone);
+class BDcontrol {
+public:
+    BDcontrol(const std::string& connectionSetup);
+
+    void createTable(const std::string& tableName);
+    void addClient(const std::string& name, const std::string& surname, const std::string& email);
+    void addClientPhone(size_t id, const std::string& phone);
+    void changeClientData(size_t id, const std::string& name, const std::string& surname,
+        const std::string& email, const std::string& phone);
     void removeClientPhone(size_t id);
     void removeClient(size_t id);
-    void findClient(std::string name, std::string surname, std::string email, std::string phone);
+
+    std::vector<Client> findClient(const std::string& name,
+        const std::string& surname,
+        const std::string& email,
+        const std::string& phone);
 
 private:
     pqxx::connection c;
